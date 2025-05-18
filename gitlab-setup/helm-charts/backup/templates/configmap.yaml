@@ -1,0 +1,174 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backup-script
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "backup.labels" . | nindent 4 }}
+data:
+  backup-k8s-resources.sh: |
+    #!/bin/bash
+    # Kubernetes Resource Backup Script with Vault Integration
+    
+    # Source Vault injected secrets
+    if [ -f "/vault/secrets/aws-credentials" ]; then
+      source "/vault/secrets/aws-credentials"
+      echo "Using AWS S3 for remote backup storage" | tee -a $LOG_FILE
+    fi
+    
+    if [ -f "/vault/secrets/backup-config" ]; then
+      source "/vault/secrets/backup-config"
+    else
+      # Default values if not provided by Vault
+      RETENTION_DAYS=${RETENTION_DAYS:-7}
+      echo "Using retention period of $RETENTION_DAYS days" | tee -a $LOG_FILE
+    fi
+    
+    # Set backup directory
+    BACKUP_DIR="/backup/k8s-resources/$(date +%Y-%m-%d)"
+    mkdir -p $BACKUP_DIR
+    
+    # Log file
+    LOG_FILE="$BACKUP_DIR/backup.log"
+    
+    echo "Starting Kubernetes resource backup at $(date)" | tee -a $LOG_FILE
+    
+    # Get all namespaces
+    echo "Backing up namespaces..." | tee -a $LOG_FILE
+    kubectl get namespaces -o yaml > $BACKUP_DIR/namespaces.yaml
+    
+    # For each namespace, backup key resources
+    for NAMESPACE in $(kubectl get namespaces -o jsonpath='{.items[*].metadata.name}'); do
+        NS_DIR="$BACKUP_DIR/$NAMESPACE"
+        mkdir -p $NS_DIR
+        
+        echo "Backing up resources in namespace: $NAMESPACE" | tee -a $LOG_FILE
+        
+        # Deployments
+        kubectl get deployments -n $NAMESPACE -o yaml > $NS_DIR/deployments.yaml
+        
+        # StatefulSets
+        kubectl get statefulsets -n $NAMESPACE -o yaml > $NS_DIR/statefulsets.yaml
+        
+        # DaemonSets
+        kubectl get daemonsets -n $NAMESPACE -o yaml > $NS_DIR/daemonsets.yaml
+        
+        # ConfigMaps
+        kubectl get configmaps -n $NAMESPACE -o yaml > $NS_DIR/configmaps.yaml
+        
+        # Secrets
+        kubectl get secrets -n $NAMESPACE -o yaml > $NS_DIR/secrets.yaml
+        
+        # Services
+        kubectl get services -n $NAMESPACE -o yaml > $NS_DIR/services.yaml
+        
+        # PersistentVolumeClaims
+        kubectl get pvc -n $NAMESPACE -o yaml > $NS_DIR/pvcs.yaml
+        
+        # Ingresses
+        kubectl get ingress -n $NAMESPACE -o yaml > $NS_DIR/ingresses.yaml 2>/dev/null
+    done
+    
+    # Backup Custom Resource Definitions
+    echo "Backing up Custom Resource Definitions..." | tee -a $LOG_FILE
+    kubectl get crds -o yaml > $BACKUP_DIR/crds.yaml 2>/dev/null
+    
+    # Backup PersistentVolumes (cluster-wide resource)
+    echo "Backing up PersistentVolumes..." | tee -a $LOG_FILE
+    kubectl get pv -o yaml > $BACKUP_DIR/pvs.yaml
+    
+    # Backup StorageClasses (cluster-wide resource)
+    echo "Backing up StorageClasses..." | tee -a $LOG_FILE
+    kubectl get storageclass -o yaml > $BACKUP_DIR/storageclasses.yaml
+    
+    # Backup ClusterRoles and ClusterRoleBindings
+    echo "Backing up RBAC resources..." | tee -a $LOG_FILE
+    kubectl get clusterroles -o yaml > $BACKUP_DIR/clusterroles.yaml
+    kubectl get clusterrolebindings -o yaml > $BACKUP_DIR/clusterrolebindings.yaml
+    
+    # Backup etcd (requires that etcdctl is configured correctly)
+    if command -v etcdctl &> /dev/null; then
+        echo "Backing up etcd..." | tee -a $LOG_FILE
+        ETCD_BACKUP_DIR="$BACKUP_DIR/etcd"
+        mkdir -p $ETCD_BACKUP_DIR
+        
+        # Add your etcdctl snapshot command here
+        # Example: ETCDCTL_API=3 etcdctl --endpoints=https://127.0.0.1:2379 \
+        #          --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+        #          --cert=/etc/kubernetes/pki/etcd/server.crt \
+        #          --key=/etc/kubernetes/pki/etcd/server.key \
+        #          snapshot save $ETCD_BACKUP_DIR/etcd-snapshot.db
+    fi
+    
+    # Backup Istio configurations if present
+    if [ "$BACKUP_ISTIO" != "false" ] && kubectl get namespace istio-system &>/dev/null; then
+        echo "Istio detected, backing up Istio configurations..." | tee -a $LOG_FILE
+        
+        # Create Istio backup directory
+        ISTIO_DIR="$BACKUP_DIR/istio"
+        mkdir -p $ISTIO_DIR
+        
+        # Backup basic Istio CRDs and resources
+        kubectl get virtualservices --all-namespaces -o yaml > $ISTIO_DIR/virtualservices.yaml
+        kubectl get destinationrules --all-namespaces -o yaml > $ISTIO_DIR/destinationrules.yaml
+        kubectl get gateways --all-namespaces -o yaml > $ISTIO_DIR/gateways.yaml
+        kubectl get serviceentries --all-namespaces -o yaml > $ISTIO_DIR/serviceentries.yaml
+        kubectl get authorizationpolicies --all-namespaces -o yaml > $ISTIO_DIR/authorizationpolicies.yaml
+        kubectl get peerauthentications --all-namespaces -o yaml > $ISTIO_DIR/peerauthentications.yaml
+        kubectl get requestauthentications --all-namespaces -o yaml > $ISTIO_DIR/requestauthentications.yaml
+        
+        # Detailed backup if requested
+        if [ "$BACKUP_DETAILED" == "true" ] && command -v istioctl &> /dev/null; then
+            echo "Backing up detailed Istio configuration..." | tee -a $LOG_FILE
+            
+            # Istio mesh config
+            istioctl mesh config > $ISTIO_DIR/mesh-config.yaml 2>/dev/null
+            
+            # Istio proxy configurations
+            mkdir -p $ISTIO_DIR/proxies
+            
+            # Get all pods with Istio sidecars
+            ISTIO_PODS=$(kubectl get pods -A -l security.istio.io/tlsMode=istio -o jsonpath='{range .items[*]}{.metadata.namespace}/{.metadata.name}{"\n"}{end}')
+            
+            for POD in $ISTIO_PODS; do
+                NS=$(echo $POD | cut -d'/' -f1)
+                POD_NAME=$(echo $POD | cut -d'/' -f2)
+                echo "Backing up proxy config for $NS/$POD_NAME..." | tee -a $LOG_FILE
+                
+                # Capture proxy config
+                istioctl proxy-config all -n $NS $POD_NAME > $ISTIO_DIR/proxies/$NS-$POD_NAME-config.txt 2>/dev/null
+            done
+        fi
+    fi
+    
+    # Compress the backup
+    echo "Compressing backup..." | tee -a $LOG_FILE
+    BACKUP_ARCHIVE="/backup/k8s-resources-$(date +%Y-%m-%d).tar.gz"
+    tar -czf $BACKUP_ARCHIVE -C $(dirname $BACKUP_DIR) $(basename $BACKUP_DIR)
+    
+    # Encrypt backup if encryption key is provided
+    if [ ! -z "$BACKUP_ENCRYPTION_KEY" ]; then
+      echo "Encrypting backup archive..." | tee -a $LOG_FILE
+      openssl enc -aes-256-cbc -salt -in $BACKUP_ARCHIVE -out ${BACKUP_ARCHIVE}.enc -k $BACKUP_ENCRYPTION_KEY
+      rm $BACKUP_ARCHIVE
+      BACKUP_ARCHIVE="${BACKUP_ARCHIVE}.enc"
+    fi
+    
+    # Upload to S3 if configured
+    if [ "$USE_S3_STORAGE" == "true" ] && [ ! -z "$AWS_ACCESS_KEY_ID" ]; then
+      echo "Uploading backup to S3 bucket: $S3_BUCKET" | tee -a $LOG_FILE
+      aws s3 cp $BACKUP_ARCHIVE s3://${S3_BUCKET}/$(basename $BACKUP_ARCHIVE)
+      
+      # Verify upload
+      if [ $? -eq 0 ]; then
+        echo "Successfully uploaded backup to S3" | tee -a $LOG_FILE
+      else
+        echo "Failed to upload backup to S3" | tee -a $LOG_FILE
+      fi
+    fi
+    
+    # Clean up old backups (based on retention days from Vault config)
+    find /backup -name "k8s-resources-*.tar.gz*" -type f -mtime +${RETENTION_DAYS} -delete
+    
+    echo "Backup completed at $(date)" | tee -a $LOG_FILE
+    echo "Backup saved to: $BACKUP_ARCHIVE" | tee -a $LOG_FILE 

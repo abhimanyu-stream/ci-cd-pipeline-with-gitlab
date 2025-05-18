@@ -1,0 +1,38 @@
+I've created a complete set of scripts to set up EC2 instances for Elasticsearch (ELK stack with Grafana), MySQL, MongoDB, and a Spring Boot application, all integrated together. Here's a summary of what I've created:
+1. Monitoring Instance (ELK Stack + Grafana)
+setup-monitoring-ec2.sh: Creates a t3.large EC2 instance with a 50GB volume
+install-monitoring.sh: Installs and configures:
+Elasticsearch (central log repository)
+Kibana (visualization interface)
+Logstash (log processing)
+Grafana (advanced dashboards)
+Filebeat and Metricbeat (for system metrics)
+2. Database Instance (MySQL + MongoDB)
+setup-databases-ec2.sh: Creates a t3.medium EC2 instance with a 50GB volume
+install-databases.sh: Installs and configures:
+MySQL (configured for remote access)
+MongoDB (configured for remote access)
+Test databases and users in both systems
+Filebeat to send logs to ELK stack
+Helper script to configure Elasticsearch connection
+3. Spring Boot Application Instance
+setup-springboot-ec2.sh: Creates a t3.medium EC2 instance
+install-springboot.sh: Installs and configures:
+Docker and Docker Compose
+Sample Spring Boot application in Docker containers
+Connection to MySQL and MongoDB databases
+Filebeat to send logs to ELK stack
+Helper scripts to connect to databases and ELK
+Integration
+The scripts include automatic integration between all components:
+Database and application logs are sent to ELK stack
+Spring Boot application connects to both MySQL and MongoDB
+Grafana dashboards use Elasticsearch as a data source
+Test data is pre-populated in databases
+Usage Instructions
+I've added detailed deployment instructions in the notes.txt file, including:
+The order in which to deploy the instances
+How to configure connections between instances
+Integration points between components
+Security considerations for production use
+These scripts provide a complete solution for running Spring Boot applications with MySQL and MongoDB databases, all monitored through the ELK stack and Grafana dashboards, meeting your requirements for this infrastructure.

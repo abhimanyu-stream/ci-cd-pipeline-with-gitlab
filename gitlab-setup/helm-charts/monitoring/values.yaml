@@ -1,0 +1,108 @@
+# Global settings
+global:
+  # Common labels applied to all resources
+  labels: {}
+  # Common annotations applied to all resources
+  annotations: {}
+
+# Prometheus settings
+prometheus:
+  enabled: true
+  server:
+    retention: 15d
+    persistentVolume:
+      enabled: true
+      size: 50Gi
+    resources:
+      requests:
+        cpu: 500m
+        memory: 512Mi
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+    # Custom alerting rules
+    alerting:
+      rules:
+        groups:
+          - name: node.rules
+            rules:
+              - alert: HighNodeCPU
+                expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+                for: 10m
+                labels:
+                  severity: warning
+                annotations:
+                  summary: "High CPU usage on {{ $labels.instance }}"
+                  description: "Node CPU usage is above 80% for more than 10 minutes (current value: {{ $value }}%)"
+          - name: backup.rules
+            rules:
+              - alert: BackupJobFailed
+                expr: kube_job_status_failed{namespace="kube-system", job_name=~"k8s-backup.*"} > 0
+                for: 1h
+                labels:
+                  severity: critical
+                annotations:
+                  summary: "Backup job has failed"
+                  description: "The Kubernetes backup job has failed, backup data may be inconsistent or missing"
+
+# Grafana settings
+grafana:
+  enabled: true
+  adminPassword: "admin123" # Should be overridden in a secure way (e.g., with Vault)
+  persistence:
+    enabled: true
+    size: 10Gi
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  # Pre-configured dashboards
+  dashboards:
+    default:
+      kubernetes-cluster:
+        gnetId: 6417
+        revision: 1
+        datasource: Prometheus
+      node-exporter:
+        gnetId: 1860
+        revision: 27
+        datasource: Prometheus
+      istio:
+        gnetId: 7645
+        revision: 1
+        datasource: Prometheus
+  # Pre-configured datasources
+  datasources:
+    datasources.yaml:
+      apiVersion: 1
+      datasources:
+        - name: Prometheus
+          type: prometheus
+          url: http://prometheus-server
+          access: proxy
+          isDefault: true
+
+# kube-state-metrics settings
+kube-state-metrics:
+  enabled: true
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+# node-exporter settings
+prometheus-node-exporter:
+  enabled: true
+  resources:
+    requests:
+      cpu: 100m
+      memory: 30Mi
+    limits:
+      cpu: 200m
+      memory: 50Mi 

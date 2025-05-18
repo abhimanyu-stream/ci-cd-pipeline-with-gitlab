@@ -1,0 +1,76 @@
+# Common labels applied to all resources
+labels: {}
+# Common annotations applied to all resources
+annotations: {}
+
+# Core backup configuration
+backup:
+  # Schedule for backup job
+  schedule: "0 1 * * *"  # Daily at 1 AM
+  # Number of successful jobs to keep
+  successfulJobsHistoryLimit: 3
+  # Number of failed jobs to keep
+  failedJobsHistoryLimit: 1
+  # Whether to use S3 storage
+  useS3Storage: true
+  
+  # Storage settings
+  storage:
+    # Size of the persistent volume claim
+    size: 10Gi
+    # Storage class name
+    storageClassName: standard
+    # Access modes for the PVC
+    accessModes:
+      - ReadWriteMany
+      
+  # Image settings
+  image:
+    repository: bitnami/kubectl
+    tag: latest
+    pullPolicy: IfNotPresent
+    
+  # Resource limits and requests
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+# Vault integration settings
+vault:
+  # Whether to integrate with Vault
+  enabled: true
+  # Role to use for Vault authentication
+  role: "backup-role"
+  # Secret paths in Vault
+  secrets:
+    # AWS credentials for S3 backup
+    aws: "secret/data/aws/s3-backup"
+    # Backup configuration (retention, encryption)
+    config: "secret/data/backup/config"
+  
+  # Default values if Vault is not available
+  defaults:
+    # Retention period in days
+    retentionDays: 7
+    # S3 bucket for remote storage
+    s3Bucket: "k8s-backups"
+    # AWS region
+    awsRegion: "us-east-1"
+
+# RBAC settings
+rbac:
+  # Whether to create RBAC resources
+  create: true
+  # Name of the service account
+  serviceAccountName: backup-sa
+
+# Istio backup settings
+istio:
+  # Whether to backup Istio configurations
+  enabled: true
+  # Whether to include detailed proxy configs
+  backupDetailed: false 

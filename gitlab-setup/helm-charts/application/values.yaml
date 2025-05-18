@@ -1,0 +1,141 @@
+# Spring Boot Application Configuration
+
+# Application details
+app:
+  name: spring-app
+  # Port the application listens on
+  port: 8080
+
+# Image settings
+image:
+  repository: your-registry/spring-app
+  tag: latest
+  pullPolicy: IfNotPresent
+
+# Deployment settings
+replicaCount: 2
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 1
+    maxUnavailable: 0
+
+# Container resource requests and limits
+resources:
+  requests:
+    memory: "512Mi"
+    cpu: "100m"
+  limits:
+    memory: "1Gi"
+    cpu: "500m"
+
+# Application configuration
+config:
+  # Spring profiles
+  springProfiles: prod
+  # Java options
+  javaOpts: "-Xms256m -Xmx512m"
+  # Application properties as key-value pairs
+  properties:
+    server.port: 8080
+    spring.application.name: spring-app
+    management.endpoints.web.exposure.include: "health,info,metrics"
+    logging.level.root: INFO
+
+# Database configuration
+database:
+  # MySQL settings
+  mysql:
+    enabled: true
+    host: "mysql.databases.svc.cluster.local"
+    port: 3306
+    database: "appdb"
+    # Use existingSecret for production
+    username: "appuser"
+    password: "changeme"
+    existingSecret: ""
+
+  # MongoDB settings
+  mongodb:
+    enabled: true
+    host: "mongodb.databases.svc.cluster.local"
+    port: 27017
+    database: "appdb"
+    # Use existingSecret for production
+    username: "appuser"
+    password: "changeme"
+    existingSecret: ""
+
+# Service configuration
+service:
+  type: ClusterIP
+  port: 80
+  annotations: {}
+
+# Ingress configuration
+ingress:
+  enabled: true
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    # For TLS with Let's Encrypt
+    # cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+    - host: spring-app.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+  # - secretName: spring-app-tls
+  #   hosts:
+  #     - spring-app.example.com
+
+# Liveness and readiness probes
+probes:
+  liveness:
+    path: /actuator/health/liveness
+    initialDelaySeconds: 60
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readiness:
+    path: /actuator/health/readiness
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+# Horizontal Pod Autoscaler
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
+
+# Logging configuration
+logging:
+  # Whether to send logs to ELK stack
+  elk:
+    enabled: true
+    host: "elasticsearch.monitoring.svc.cluster.local"
+    port: 9200
+
+# Istio configuration
+istio:
+  enabled: true
+  # Whether to inject Istio sidecar automatically
+  autoInject: true
+  # Gateway configuration
+  gateway:
+    enabled: true
+    name: "app-gateway"
+  # Virtual service configuration
+  virtualService:
+    enabled: true
+    hosts:
+      - "spring-app.example.com"
+    gateways:
+      - "app-gateway"
+  # mTLS settings
+  mtls:
+    mode: STRICT 

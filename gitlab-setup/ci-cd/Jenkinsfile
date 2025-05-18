@@ -1,0 +1,90 @@
+// THIS JENKINSFILE SHOULD BE PLACED IN YOUR APPLICATION REPOSITORY
+// IT DEFINES THE CI/CD PIPELINE FOR KUBERNETES DEPLOYMENTS
+
+pipeline {
+    agent any
+    
+    environment {
+        DOCKER_IMAGE = 'my-app:latest'
+        NEXUS_URL = 'http://nexus-server:8081'
+        GITLAB_URL = 'http://gitlab-server'
+    }
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+        
+        stage('Build') {
+            steps {
+                sh 'mvn clean package'
+            }
+        }
+        
+        stage('Build Docker Image') {
+            steps {
+                sh 'docker build -t ${DOCKER_IMAGE} .'
+            }
+        }
+        
+        stage('Scan with Trivy') {
+            steps {
+                sh '''
+                # Scan Docker image
+                trivy image --severity HIGH,CRITICAL ${DOCKER_IMAGE}
+                '''
+                
+                // Fail build if HIGH or CRITICAL vulnerabilities found
+                sh '''
+                if trivy image --exit-code 1 --severity HIGH,CRITICAL ${DOCKER_IMAGE}; then
+                    echo "No HIGH or CRITICAL vulnerabilities found"
+                else
+                    echo "HIGH or CRITICAL vulnerabilities found!"
+                    exit 1
+                fi
+                '''
+            }
+        }
+        
+        stage('Push to Nexus') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'nexus-credentials', usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
+                    sh '''
+                    # Tag image for Nexus
+                    docker tag ${DOCKER_IMAGE} ${NEXUS_URL}/repository/docker-hosted/${DOCKER_IMAGE}
+                    
+                    # Login to Nexus
+                    echo ${NEXUS_PASS} | docker login -u ${NEXUS_USER} --password-stdin ${NEXUS_URL}
+                    
+                    # Push to Nexus
+                    docker push ${NEXUS_URL}/repository/docker-hosted/${DOCKER_IMAGE}
+                    '''
+                }
+            }
+        }
+        
+        stage('Deploy to Kubernetes') {
+            steps {
+                withKubeConfig([credentialsId: 'kubernetes-config']) {
+                    sh '''
+                    # Update Kubernetes deployment
+                    kubectl set image deployment/my-app my-app=${NEXUS_URL}/repository/docker-hosted/${DOCKER_IMAGE} -n my-app
+                    
+                    # Verify deployment
+                    kubectl rollout status deployment/my-app -n my-app
+                    '''
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            // Clean up
+            sh 'docker rmi ${DOCKER_IMAGE} || true'
+            sh 'docker rmi ${NEXUS_URL}/repository/docker-hosted/${DOCKER_IMAGE} || true'
+        }
+    }
+} 

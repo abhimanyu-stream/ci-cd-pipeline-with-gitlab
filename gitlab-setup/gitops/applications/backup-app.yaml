@@ -1,0 +1,32 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: k8s-backup
+  namespace: argocd
+spec:
+  project: infrastructure
+  source:
+    repoURL: https://github.com/your-org/k8s-infrastructure.git
+    targetRevision: HEAD
+    path: gitlab-setup/backup/configs
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kube-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - CreateNamespace=false
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  ignoreDifferences:
+  - group: batch
+    kind: CronJob
+    jsonPointers:
+    - /spec/jobTemplate/spec/template/spec/containers/0/image
+    - /status 

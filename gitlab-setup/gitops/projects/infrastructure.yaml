@@ -1,0 +1,38 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: infrastructure
+  namespace: argocd
+spec:
+  description: Core infrastructure components
+  
+  # Only allow infrastructure components to be deployed in specific namespaces
+  destinations:
+  - namespace: kube-system
+    server: https://kubernetes.default.svc
+  - namespace: monitoring
+    server: https://kubernetes.default.svc
+  - namespace: istio-system
+    server: https://kubernetes.default.svc
+  
+  # Allow resources to be deployed from the infrastructure repo
+  sourceRepos:
+  - https://github.com/your-org/k8s-infrastructure.git
+  
+  # Allow specific cluster-scoped resources needed for infrastructure
+  clusterResourceWhitelist:
+  - group: '*'
+    kind: 'Namespace'
+  - group: 'rbac.authorization.k8s.io'
+    kind: '*'
+  - group: 'storage.k8s.io'
+    kind: '*'
+  
+  # Allow all namespaced resources for infrastructure components
+  namespaceResourceWhitelist:
+  - group: '*'
+    kind: '*'
+    
+  # Deny deletions during sync to prevent accidental removal of critical resources
+  orphanedResources:
+    warn: true 

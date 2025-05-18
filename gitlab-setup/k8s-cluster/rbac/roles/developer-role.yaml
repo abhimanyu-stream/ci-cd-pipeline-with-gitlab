@@ -1,0 +1,94 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: developer-role
+  namespace: dev
+rules:
+# Allow full access to deployments, pods, services, etc.
+- apiGroups: ["", "apps", "batch", "extensions"]
+  resources: ["deployments", "replicasets", "pods", "services", "configmaps", "secrets", 
+              "jobs", "cronjobs", "daemonsets", "statefulsets", "ingresses"]
+  verbs: ["*"]
+# Access to logs and pod exec
+- apiGroups: [""]
+  resources: ["pods/log", "pods/exec"]
+  verbs: ["get", "list", "create"]
+# Limited access to PVCs in their namespace
+- apiGroups: [""]
+  resources: ["persistentvolumeclaims"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: developer-binding
+  namespace: dev
+subjects:
+- kind: ServiceAccount
+  name: developer
+  namespace: dev
+roleRef:
+  kind: Role
+  name: developer-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# Staging environment with similar permissions
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: developer-role
+  namespace: staging
+rules:
+- apiGroups: ["", "apps", "batch", "extensions"]
+  resources: ["deployments", "replicasets", "pods", "services", "configmaps", "secrets", 
+              "jobs", "cronjobs", "daemonsets", "statefulsets", "ingresses"]
+  verbs: ["*"]
+- apiGroups: [""]
+  resources: ["pods/log", "pods/exec"]
+  verbs: ["get", "list", "create"]
+- apiGroups: [""]
+  resources: ["persistentvolumeclaims"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: developer-binding
+  namespace: staging
+subjects:
+- kind: ServiceAccount
+  name: developer
+  namespace: staging
+roleRef:
+  kind: Role
+  name: developer-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# Production environment with restricted permissions
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: developer-role
+  namespace: prod
+rules:
+- apiGroups: ["", "apps", "batch", "extensions"]
+  resources: ["deployments", "replicasets", "pods", "services", "configmaps", 
+              "jobs", "cronjobs", "daemonsets", "statefulsets", "ingresses"]
+  verbs: ["get", "list", "watch"] # Read-only for most resources
+- apiGroups: [""]
+  resources: ["pods/log"]
+  verbs: ["get", "list"] # Only view logs
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: developer-binding
+  namespace: prod
+subjects:
+- kind: ServiceAccount
+  name: developer
+  namespace: prod
+roleRef:
+  kind: Role
+  name: developer-role
+  apiGroup: rbac.authorization.k8s.io 

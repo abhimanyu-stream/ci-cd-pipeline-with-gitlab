@@ -1,0 +1,27 @@
+You now have a complete solution for adding two-way SSL/TLS authentication (mutual TLS) for your Kafka cluster using PKCS12 keystores and truststores. Here's what I've created:
+Kafka Security Configuration:
+install-kafka.sh: Basic Kafka installation script with security directories
+setup-kafka-security.sh: Configures mutual TLS with PKCS12 keystores for brokers, producers, and consumers
+EC2 Deployment:
+Updated setup-kafka-ec2.sh to include security setup when creating the Kafka cluster
+Added proper security group rules for the Kafka ports
+Java Client Examples:
+SecureKafkaProducer.java: Example of a producer with SSL authentication
+SecureKafkaConsumer.java: Example of a consumer with SSL authentication
+pom.xml: Maven configuration for building the examples
+build.sh: Script to build the Java examples
+copy-keys.sh: Script to copy keystores from a Kafka node for local use
+Documentation:
+kafka-security-documentation.md: Comprehensive guide to the security setup
+Updated README.md with information about the Kafka security implementation
+Documentation for the Java examples
+This implementation provides:
+Separate PKCS12 keystores for brokers, producers, and consumers
+A single Certificate Authority (CA) that signs all certificates
+Two-way SSL handshake for mutual authentication
+Secure connection on port 9093 (alongside standard connections on 9092)
+Complete example code for Java clients
+To deploy this solution:
+Run setup-kafka-ec2.sh to create the Kafka cluster with security enabled
+The security setup will run automatically during instance startup
+Use the Java examples to test secure connections to your Kafka cluster

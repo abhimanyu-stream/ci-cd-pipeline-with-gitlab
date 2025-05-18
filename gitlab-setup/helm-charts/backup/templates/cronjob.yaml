@@ -1,0 +1,73 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: k8s-backup
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "backup.labels" . | nindent 4 }}
+  {{- if .Values.vault.enabled }}
+  annotations:
+    vault.hashicorp.com/agent-inject: "true"
+    vault.hashicorp.com/role: "{{ .Values.vault.role }}"
+    vault.hashicorp.com/agent-pre-populate-only: "true"
+    vault.hashicorp.com/agent-inject-secret-aws-credentials: "{{ .Values.vault.secrets.aws }}"
+    vault.hashicorp.com/agent-inject-template-aws-credentials: |
+      {{- print "{{" -}} - with secret "{{ .Values.vault.secrets.aws }}" -{{- print "}}" }}
+      export AWS_ACCESS_KEY_ID="{{- print "{{" -}} .Data.data.access_key {{- print "}}" }}"
+      export AWS_SECRET_ACCESS_KEY="{{- print "{{" -}} .Data.data.secret_key {{- print "}}" }}"
+      export AWS_REGION="{{- print "{{" -}} .Data.data.region {{- print "}}" }}"
+      export S3_BUCKET="{{- print "{{" -}} .Data.data.bucket {{- print "}}" }}"
+      {{- print "{{" -}} - end -{{- print "}}" }}
+    vault.hashicorp.com/agent-inject-secret-backup-config: "{{ .Values.vault.secrets.config }}"
+    vault.hashicorp.com/agent-inject-template-backup-config: |
+      {{- print "{{" -}} - with secret "{{ .Values.vault.secrets.config }}" -{{- print "}}" }}
+      export RETENTION_DAYS="{{- print "{{" -}} .Data.data.retention_days {{- print "}}" }}"
+      export BACKUP_ENCRYPTION_KEY="{{- print "{{" -}} .Data.data.encryption_key {{- print "}}" }}"
+      {{- print "{{" -}} - end -{{- print "}}" }}
+  {{- end }}
+spec:
+  schedule: "{{ .Values.backup.schedule }}"
+  successfulJobsHistoryLimit: {{ .Values.backup.successfulJobsHistoryLimit }}
+  failedJobsHistoryLimit: {{ .Values.backup.failedJobsHistoryLimit }}
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: {{ .Values.rbac.serviceAccountName }}
+          restartPolicy: OnFailure
+          volumes:
+          - name: backup-script
+            configMap:
+              name: backup-script
+              defaultMode: 0755
+          - name: backup-volume
+            persistentVolumeClaim:
+              claimName: backup-pvc
+          containers:
+          - name: backup
+            image: "{{ .Values.backup.image.repository }}:{{ .Values.backup.image.tag }}"
+            imagePullPolicy: {{ .Values.backup.image.pullPolicy }}
+            command:
+            - /bin/bash
+            - /scripts/backup-k8s-resources.sh
+            env:
+            - name: USE_S3_STORAGE
+              value: "{{ .Values.backup.useS3Storage }}"
+            {{- if not .Values.vault.enabled }}
+            - name: RETENTION_DAYS
+              value: "{{ .Values.vault.defaults.retentionDays }}"
+            - name: S3_BUCKET
+              value: "{{ .Values.vault.defaults.s3Bucket }}"
+            - name: AWS_REGION
+              value: "{{ .Values.vault.defaults.awsRegion }}"
+            {{- end }}
+            - name: BACKUP_DETAILED
+              value: "{{ .Values.istio.backupDetailed }}"
+            volumeMounts:
+            - name: backup-script
+              mountPath: /scripts
+            - name: backup-volume
+              mountPath: /backup
+            resources:
+              {{- toYaml .Values.backup.resources | nindent 14 }} 

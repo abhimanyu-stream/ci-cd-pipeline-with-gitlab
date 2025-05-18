@@ -1,0 +1,21 @@
+I've implemented Helm charts in the gitlab-setup directory as requested. Here's what I've created:
+Main Helm Charts Directory Structure:
+Created a helm-charts directory with a comprehensive README
+Monitoring Stack Chart:
+Implemented a Helm chart for Prometheus and Grafana
+Created Chart.yaml with proper dependencies to official Helm repositories
+Configured values.yaml with monitoring settings and alert definitions
+Backup System Chart:
+Created a complete Helm chart for your Kubernetes backup solution
+Integrated Vault for secure credential management
+Added support for S3 storage and encryption
+Included Istio configuration backups
+Implemented proper RBAC and configuration
+Spring Boot Application Chart:
+Created a comprehensive chart for deploying Spring Boot applications
+Added support for MySQL and MongoDB database integration
+Implemented Istio service mesh support with Gateway, VirtualService, and mTLS
+Added Prometheus metrics and ELK stack logging integration
+Configured ingress resources and horizontal pod autoscaler
+These Helm charts provide a standardized way to deploy and manage all the components of your infrastructure, following best practices for configuration management, security, and integration with other systems.
+
